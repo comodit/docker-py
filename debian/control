@@ -1,0 +1,14 @@
+Source: python-docker-py
+Section: python
+Priority: optional
+Maintainer: Raphael De Giusti <raphael.degiusti@gmail.com>
+Build-Depends: debhelper (>=8.0.0~), python-support (>= 0.6), python-all-dev, cdbs
+XS-Python-Version: >=2.6
+Standards-Version: 3.9.1.0
+
+Package: python-docker-py
+Architecture: all
+Homepage: https://github.com/dotcloud/docker-py
+XB-Python-Version: ${python:Versions}
+Depends: ${misc:Depends}, ${python:Depends}
+Description: An API client for docker written in Python
