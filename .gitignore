@@ -4,5 +4,6 @@ dist
 *.egg/
 *.pyc
 *.swp
+*.spec
 
 .tox
