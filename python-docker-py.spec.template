@@ -1,0 +1,53 @@
+%{!?python_sitelib: %global python_sitelib %(%{__python} -c "from distutils.sysconfig import get_python_lib; print(get_python_lib())")}
+
+
+Name:           python-docker-py
+Version:        #VERSION#
+Release:        #RELEASE#%{dist}
+Summary:        An API client for docker written in Python
+
+Group:          Development/Languages
+License:        MIT
+URL:            http://github.com/guardis/comodit-agent
+Source0:        %{name}-%{version}-#RELEASE#.tar.gz
+BuildRoot:      %{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
+
+BuildArch:      noarch
+
+BuildRequires: python-devel
+BuildRequires: python-setuptools
+
+Requires: python-requests
+Requires: python-six
+
+%description
+An API client for docker written in Python
+
+%prep
+%setup -q -c
+
+%build
+%{__python} setup.py build
+
+%install
+%{__rm} -rf %{buildroot}
+
+%{__python} setup.py install -O1 --skip-build --root %{buildroot}
+
+# Remove egg info
+%{__rm} -rf %{buildroot}/%{python_sitelib}/docker_py*.egg-info
+
+%clean
+%{__rm} -rf %{buildroot}
+
+%files
+%defattr(-,root,root,-)
+%doc
+# For noarch packages: sitelib
+%{python_sitelib}/*
+
+
+%changelog
+* Fri Jul 13 2012 - raphael.degiusti (at) gmail.com
+- Added first changelog log
+
