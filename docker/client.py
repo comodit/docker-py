@@ -6,19 +6,64 @@ import re
 import six
 import shlex
 import tarfile
+import tempfile
+import six
+import httplib
+import socket
 
 import requests
 from requests.exceptions import HTTPError
-import six
+from requests.adapters import HTTPAdapter
+from requests.packages.urllib3.connectionpool import HTTPConnectionPool
 
 if six.PY3:
     from io import StringIO
 else:
     from StringIO import StringIO
 
+class UnixHTTPConnection(httplib.HTTPConnection, object):
+    def __init__(self, base_url, unix_socket):
+        httplib.HTTPConnection.__init__(self, 'localhost')
+        self.base_url = base_url
+        self.unix_socket = unix_socket
+
+    def connect(self):
+        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        sock.connect(self.base_url.replace("unix:/",""))
+        self.sock = sock
+
+    def _extract_path(self, url):
+        #remove the base_url entirely..
+        return url.replace(self.base_url, "")
+
+    def request(self, method, url, **kwargs):
+        url = self._extract_path(self.unix_socket)
+        super(UnixHTTPConnection, self).request(method, url, **kwargs)
+
+
+class UnixHTTPConnectionPool(HTTPConnectionPool):
+    def __init__(self, base_url, socket_path):
+        self.socket_path = socket_path
+        self.base_url = base_url
+        super(UnixHTTPConnectionPool, self).__init__(self, 'localhost')
+
+    def _new_conn(self):
+        return UnixHTTPConnection(self.base_url, self.socket_path)
+
+
+class UnixAdapter(HTTPAdapter):
+    def __init__(self, base_url):
+        self.base_url = base_url
+        super(UnixAdapter, self).__init__()
+
+    def get_connection(self, socket_path, proxies=None):
+        return UnixHTTPConnectionPool(self.base_url, socket_path)
+
+
 class Client(requests.Session):
-    def __init__(self, base_url="http://localhost:4243", version="1.3"):
+    def __init__(self, base_url="unix://var/run/docker.sock", version="1.4"):
         super(Client, self).__init__()
+        self.mount('unix://', UnixAdapter(base_url))
         self.base_url = base_url
         self._version = version
         try:
@@ -77,27 +122,25 @@ class Client(requests.Session):
         }
 
     def _mkbuildcontext(self, dockerfile):
-        memfile = StringIO()
-        try:
-            t = tarfile.open(mode='w', fileobj=memfile)
-            if isinstance(dockerfile, StringIO):
-                dfinfo = tarfile.TarInfo('Dockerfile')
-                dfinfo.size = dockerfile.len
-            else:
-                dfinfo = t.gettarinfo(fileobj=dockerfile, arcname='Dockerfile')
-            t.addfile(dfinfo, dockerfile)
-            return memfile.getvalue()
-        finally:
-            memfile.close()
+        f = tempfile.TemporaryFile()
+        t = tarfile.open(mode='w', fileobj=f)
+        if isinstance(dockerfile, StringIO):
+            dfinfo = tarfile.TarInfo('Dockerfile')
+            dfinfo.size = dockerfile.len
+        else:
+            dfinfo = t.gettarinfo(fileobj=dockerfile, arcname='Dockerfile')
+        t.addfile(dfinfo, dockerfile)
+        t.close()
+        f.seek(0)
+        return f
 
     def _tar(self, path):
-        memfile = StringIO()
-        try:
-            t = tarfile.open(mode='w', fileobj=memfile)
-            t.add(path, arcname='.')
-            return memfile.getvalue()
-        finally:
-            memfile.close()
+        f = tempfile.TemporaryFile()
+        t = tarfile.open(mode='w', fileobj=f)
+        t.add(path, arcname='.')
+        t.close()
+        f.seek(0)
+        return f
 
     def _post_json(self, url, data, **kwargs):
         # Go <1.1 can't unserialize null to a string
@@ -170,7 +213,7 @@ class Client(requests.Session):
             else:
                 break
 
-    def build(self, path=None, tag=None, quiet=False, fileobj=None):
+    def build(self, path=None, tag=None, quiet=False, fileobj=None, nocache=False):
         remote = context = headers = None
         if path is None and fileobj is None:
             raise Exception("Either path or fileobj needs to be provided.")
@@ -184,11 +227,13 @@ class Client(requests.Session):
             context = self._tar(path)
 
         u = self._url('/build')
-        params = { 'tag': tag, 'remote': remote, 'q': quiet }
+        params = { 'tag': tag, 'remote': remote, 'q': quiet, 'nocache': nocache }
         if context is not None:
             headers = { 'Content-Type': 'application/tar' }
         res = self._result(self.post(u, context, params=params,
             headers=headers, stream=True))
+        if context is not None:
+            context.close()
         srch = r'Successfully built ([0-9a-f]+)'
         match = re.search(srch, res)
         if not match:

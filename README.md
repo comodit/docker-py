@@ -6,11 +6,11 @@ An API client for docker written in Python
 API
 ===
 
-`docker.Client(base_url='http://localhost:4243', version="1.3")`  
+`docker.Client(base_url='unix://var/run/docker.sock', version="1.3")`  
 Client class. `base_url` refers to the protocol+hostname+port where the docker
 server is hosted. Version is the version of the API the client will use.
 
-* `c.build(path=None, tag=None, quiet=False, fileobj=None)`  
+* `c.build(path=None, tag=None, quiet=False, fileobj=None, nocache=False)`  
 Similar to the `docker build` command. Either `path` or `fileobj` needs to be
 set. `path` can be a local path (to a directory containing a Dockerfile) or a
 remote URL. `fileobj` must be a readable file-like object to a Dockerfile.
