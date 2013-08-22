@@ -12,10 +12,6 @@ RELEASE=`git describe --tags --long | awk -F"-" '{print $2}'`
 COMMIT=`git describe --tags --long | awk -F"-" '{print $3}'`
 MESSAGE="Release $VERSION-$RELEASE-$COMMIT"
 
-# Set version information
-. scripts/build-pkg-functions
-set_version $1 $2
-
 echo $MESSAGE
 
 export DEBEMAIL
